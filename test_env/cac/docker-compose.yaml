@@ -1,0 +1,16 @@
+services:
+  cac:
+    container_name: cac
+    build: .
+    restart: unless-stopped
+    networks:
+      - cac-net
+    privileged: true
+    ports:
+      - "1337:1337"
+    environment:
+      POW_DIFFICULTY_SECONDS: "0"
+
+networks:
+  cac-net:
+    driver: bridge 
