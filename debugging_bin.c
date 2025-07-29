@@ -1,5 +1,4 @@
-#define BINARY_ARGS "./prob", NULL
-#define DEBUG_ARGS "gdbserver", "gdbserver", ""
+#define BINARY_ARGS 'socat', 'TCP-LISTEN:1337,reuseaddr,fork', 'EXEC:"kctf_pow', 'nsjail', '--config', '/home/user/nsjail.cfg', '--', '/home/user/chal"', NULL
 #define PID_OFFSET 0
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +9,7 @@
 #include <string.h>
 
 char* bin_args[] = {BINARY_ARGS};
+char* separator = "\n-----------------------------------------------------------------------------------\n";
 
 int read_until(int fd, char* buf, char terminator){
     char car;
@@ -45,29 +45,32 @@ int main(int argc, char** argv){
     pid_t binary, debugger;
     int pid;
     char* dbg_args[] = {"gdbserver" ,":1234", "--attach", malloc(20), NULL};
+    int pipefd[2];
+    pipe(pipefd);
 
     binary = fork();
     if (binary == 0){
+        // Child: redirect stdout and stderr to pipe
+        close(pipefd[0]); // Close unused read end
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
         execvp(bin_args[0], bin_args);
         perror("Binary execution failed!");
+        exit(1);
     }
-    sleep(1);
-    debugger = fork();
-    if (debugger == 0){
-        int null_fd = open("/dev/null", O_RDWR);
-        if (null_fd < 0) {
-            perror("open /dev/null");
-            exit(1);
-        }
-        pid = find_pid(binary, bin_args[0]);
-        sprintf(dbg_args[3], "%d", pid);
-        printf("Binary PID: %d, UID: %d\n", binary, getuid());
-
-        dup2(null_fd, STDIN_FILENO);
-        dup2(null_fd, STDOUT_FILENO);
-        execvp("gdbserver", dbg_args);
-        perror("gdbserver execution failed!");
+    close(pipefd[1]); // Parent: close unused write end
+    // Now pipefd[0] can be used to read output from binary
+    FILE *stream = fdopen(pipefd[0], "r");
+    if (stream == NULL) {
+        perror("fdopen failed");
+        exit(1);
     }
+    char buffer[1024];
+    while (fgets(buffer, sizeof(buffer), stream) != NULL) {
+        // Process the output as needed
+        printf("%s%s%s", separator, buffer, separator);
+    }
+    fclose(stream);
     waitpid(binary, NULL, 0);
-    waitpid(debugger, NULL, 0);
 }
