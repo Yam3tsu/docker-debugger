@@ -37,7 +37,7 @@ for dir in */ ; do
     gdb_port=$(echo $ports | awk '{print $1}')
     socat_port=$(echo $ports | awk '{print $2}')
     echo -e "${CYAN}Starting docker compose...${NC}"
-    docker compose up -d > /dev/null 2>&1
+    docker compose up --build -d > /dev/null 2>&1
     echo -e "${CHECK} docker compose up completed"
     echo -e "${YELLOW}Testing connection to socat service on port $socat_port...${NC}"
     output=$(timeout 3 bash -c "echo 'test' | nc localhost $socat_port")
