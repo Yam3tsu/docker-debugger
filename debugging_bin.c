@@ -42,6 +42,7 @@ int find_pid (int start_pid ,char* bin_name){
 }
 
 int main(int argc, char** argv){
+    setbuf(stdout, NULL);
     pid_t binary, debugger;
     int pid;
     char* dbg_args[] = {"gdbserver" ,":1234", "--attach", malloc(20), NULL};
@@ -66,6 +67,7 @@ int main(int argc, char** argv){
         perror("fdopen failed");
         exit(1);
     }
+    setbuf(stream, NULL);
     char buffer[1024];
     while (fgets(buffer, sizeof(buffer), stream) != NULL) {
         // Process the output as needed
