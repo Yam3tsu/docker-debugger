@@ -76,7 +76,7 @@ def argparser():
         print(HELP)
         exit(1)
     positional_arguments = 0
-    for i in range(len(sys.argv)):
+    for i in range(1, len(sys.argv)):
         arg = sys.argv[i]
 
         if arg == "-h" or arg == "--help":
@@ -124,8 +124,25 @@ def argparser():
 def main():
     argparser()
 
+    # Check for Dockerfile
+    dockerfile_path = os.path.join(DOCKER_PATH, "Dockerfile")
+    compose_yml_path = os.path.join(DOCKER_PATH, "docker-compose.yml")
+    compose_yaml_path = os.path.join(DOCKER_PATH, "docker-compose.yaml")
+
+    if not os.path.isfile(dockerfile_path):
+        print("Dockerfile not found in the specified path.")
+        exit(1)
+
+    if os.path.isfile(compose_yaml_path) and not os.path.isfile(compose_yml_path):
+        # Rename docker-compose.yaml to docker-compose.yml
+        os.rename(compose_yaml_path, compose_yml_path)
+
+    if not os.path.isfile(compose_yml_path):
+        print("docker-compose.yml not found in the specified path.")
+        exit(1)
+
     # RETRIVE SOCAT COMMAND
-    f = open("Dockerfile", "r")
+    f = open(dockerfile_path, "r")
     dockerfile = f.read()
     f.close()
 
@@ -152,7 +169,7 @@ def main():
     f.close()
 
     # WRITE A BACKUP OF Dockerfile
-    f = open("Dockerfile.bak", "w")
+    f = open(dockerfile_path + ".bak", "w")
     f.write(dockerfile)
     f.close()
 
@@ -166,10 +183,10 @@ def main():
     f.close()
 
     # WRITE BACKUP FOR docker-compose.yml
-    f = open("docker-compose.yml", "r")
+    f = open(compose_yml_path, "r")
     docker_compose = f.read()
     f.close()
-    f = open("docker-compose.bak", "w")
+    f = open(compose_yml_path.replace("yml", "bak"), "w")
     f.write(docker_compose)
     f.close()
 
@@ -180,7 +197,7 @@ def main():
     nuovo[0] = nuovo[0] + "ports:\n"
     nuovo[1] = (identation + f"- {GDBSERVER_PORT}:{GDBSERVER_PORT}") + nuovo[1]
     nuovo = "".join(nuovo)
-    f = open("docker-compose.yml", "w")
+    f = open(compose_yml_path, "w")
     f.write(nuovo)
     f.close()
 
