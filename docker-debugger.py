@@ -141,34 +141,38 @@ def main():
         print("docker-compose.yml not found in the specified path.")
         exit(1)
 
-    # RETRIVE SOCAT COMMAND
+    # OPEN Dockerfile
     f = open(dockerfile_path, "r")
     dockerfile = f.read()
     f.close()
 
+    # CHECK IF DOCKER IS ALREDY PATCHED
     if "# DOCKER SETUP BY docker-debugger" in dockerfile:
         print("Project alredy patched, restore the backup before using docker-debugger again")
         exit(1)
 
+    # CHECK IF DOCKER USE SOCAT
     command = dockerfile[dockerfile.find("CMD"):]
     if not "socat" in command:
         print("This docker doesn't use socat...")
         exit(1)
 
+    # RETRIVE SOCAT COMMAND
     command = command[command.find("EXEC:") + 5:].replace("\"", "")
     init = INIT_TEMPLATE.format(SOCAT_COMMAND=command)
     debugger = DEBUGGER_TEMPLATE.format(BIN_NAME = BIN_PATH.split("/")[-1], GDBSERVER_PORT = GDBSERVER_PORT)
 
-    # WRITE .init AND .debugger
+    # WRITE .init
     f = open("./.init.sh", "w")
     f.write(init)
     f.close()
 
+    # WRITE .debugger
     f = open("./.debugger.sh", "w")
-    f.write(DEBUGGER_TEMPLATE)
+    f.write(debugger)
     f.close()
 
-    # WRITE A BACKUP OF Dockerfile
+    # WRITE A BACKUP OF Dockerfile IN Dockerfile.bak
     f = open(dockerfile_path + ".bak", "w")
     f.write(dockerfile)
     f.close()
@@ -182,7 +186,7 @@ def main():
     f.write(nuovo)
     f.close()
 
-    # WRITE BACKUP FOR docker-compose.yml
+    # WRITE BACKUP FOR docker-compose.yml IN docker-compose.bak
     f = open(compose_yml_path, "r")
     docker_compose = f.read()
     f.close()
