@@ -303,6 +303,13 @@ def docker_cmd_arg_extract(command):
         args_list.append(new_arg)
     return args_list
 
+def add_verbose(arguments):
+    new_args = []
+    new_args.append(arguments[0])
+    new_args.append("-d")
+    new_args.append("-d")
+    new_args = new_args + arguments[1:]
+    return new_args
 
 def main():
     argparser()
@@ -342,6 +349,7 @@ def main():
     
     # PARSE args_list TO USE IT IN THE C_TEMPLATE
     args_list = docker_cmd_arg_extract(command)
+    args_list = add_verbose(args_list)
     args = str(args_list)[1:-1].split(", ")
     for i in range(len(args)):
         args[i] = '"' + args[i][1:-1].replace('"', '\\"') + '", '

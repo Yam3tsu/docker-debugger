@@ -42,7 +42,6 @@ for dir in */ ; do
     echo -e "${YELLOW}Testing connection to socat service on port $socat_port...${NC}"
     output=$(timeout 3 bash -c "echo 'test' | nc localhost $socat_port")
     sleep 1
-    echo -ne '\$qSupported#37' | nc localhost $gdb_port
     if [ -n "$output" ]; then
         echo -e "${CHECK} Received output from socat service on port $socat_port"
     else
@@ -57,7 +56,7 @@ for dir in */ ; do
     echo -e "${YELLOW}Testing gdbserver on port $gdb_port...${NC}"
     # Keep socat session active while testing gdbserver
     socat_pid=""
-    timeout 5 bash -c "echo 'test' | nc localhost $socat_port" >/dev/null &
+    timeout 5 nc localhost $socat_port >/dev/null &
     socat_pid=$!
     sleep 1
     gdb_output=$(timeout 3 bash -c "echo -ne '\$qSupported#37' | nc localhost $gdb_port")
