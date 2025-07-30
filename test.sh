@@ -41,6 +41,8 @@ for dir in */ ; do
     echo -e "${CHECK} docker compose up completed"
     echo -e "${YELLOW}Testing connection to socat service on port $socat_port...${NC}"
     output=$(timeout 3 bash -c "echo 'test' | nc localhost $socat_port")
+    sleep 1
+    echo -ne '\$qSupported#37' | nc localhost $gdb_port
     if [ -n "$output" ]; then
         echo -e "${CHECK} Received output from socat service on port $socat_port"
     else
@@ -53,6 +55,11 @@ for dir in */ ; do
     fi
 
     echo -e "${YELLOW}Testing gdbserver on port $gdb_port...${NC}"
+    # Keep socat session active while testing gdbserver
+    socat_pid=""
+    timeout 5 bash -c "echo 'test' | nc localhost $socat_port" >/dev/null &
+    socat_pid=$!
+    sleep 1
     gdb_output=$(timeout 3 bash -c "echo -ne '\$qSupported#37' | nc localhost $gdb_port")
     if [ -n "$gdb_output" ]; then
         echo -e "${CHECK} gdbserver is available on port $gdb_port"
@@ -63,6 +70,10 @@ for dir in */ ; do
         echo -e "${CHECK} docker compose down completed"
         cd $test_dir
         continue
+    fi
+    # Cleanup socat session if still running
+    if [ -n "$socat_pid" ] && kill -0 $socat_pid 2>/dev/null; then
+        kill $socat_pid
     fi
 
     echo -e "${CYAN}Stopping docker compose...${NC}"
