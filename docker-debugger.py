@@ -18,19 +18,6 @@ OPTIONS:
     -h --help: print this message
 '''
 BIN_PATH = ""
-DEBUGGER_TEMPLATE = '''
-
-sleep 1
-PID=$(pgrep {BIN_NAME} | sort -n | tail -n 1)
-gdbserver :{GDBSERVER_PORT} --attach $PID
-
-'''
-INIT_TEMPLATE = '''
-
-/.debugger.sh &
-{SOCAT_COMMAND}
-
-'''
 DOCKER_SETUP = '''
 
 # DOCKER SETUP BY docker-debugger
@@ -41,8 +28,6 @@ RUN apt install -y gdbserver
 
 '''
 C_TEMPLATE = '''
-#define BINARY_ARGS 'socat', 'TCP-LISTEN:1337,reuseaddr,fork', 'EXEC:"kctf_pow nsjail --config /home/user/nsjail.cfg -- /home/user/chal"', NULL
-#define PID_OFFSET 0
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -52,10 +37,11 @@ C_TEMPLATE = '''
 #include <string.h>
 #include <signal.h>
 
-// char* bin_args[] = {BINARY_ARGS};
 char* separator = "\\n-----------------------------------------------------------------------------------\\n";
 int pid_counter = 0;
+int gdbserver_pid = -1;
 
+// Read from fd into buf untill the first occurence of terimnator
 int read_until(int fd, char* buf, char terminator){
     char car;
     int i = 0;
@@ -70,6 +56,8 @@ int read_until(int fd, char* buf, char terminator){
     return i;
 }
 
+// Return the max pid of processes with name == bin_name
+// The search begin from pid == start_pid (optimization purpose)
 int find_max_pid(int start_pid, char* bin_name) {
     int max_pid = -1;
     int fd;
@@ -90,6 +78,7 @@ int find_max_pid(int start_pid, char* bin_name) {
     return max_pid;
 }
 
+// Return the min pid greater then start_pid of processes with name == bin_name
 int find_min_pid (int start_pid, char* bin_name){
     char found = 0;
     int fd;
@@ -108,15 +97,18 @@ int find_min_pid (int start_pid, char* bin_name){
     return res;
 }
 
-void kill_gdb(){
-    int pid = find_min_pid(pid_counter, "gdbserver");
-    kill(pid, SIGKILL);
-}
 
 void run_gdb(int pid){
     pid_t debugger;
     int dev_null;
     char* debugger_args[5];
+
+    if (gdbserver_pid > 0){
+        if (kill(gdbserver_pid, SIGKILL) == 0){
+            printf("Killed gdbserver (PID=%d)", gdbserver_pid);
+        }
+    }
+
     debugger = fork();
     if (debugger == 0){
         dev_null = open("/dev/null", O_RDWR);
@@ -131,7 +123,10 @@ void run_gdb(int pid){
         debugger_args[4] = NULL;
         execvp("gdbserver", debugger_args);
     }
-    waitpid(debugger, NULL, 0);
+    else{
+        gdbserver_pid = debugger;
+        printf("Starting gdbserver (PID=%d)", gdbserver_pid);
+    }
 }
 
 void print_argv(int argc, char** argv){
@@ -170,7 +165,6 @@ int main(int argc, char** argv){
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[1]);
-        // execvp(bin_args[0], bin_args);
         execvp(binary_arguments[0], binary_arguments);
         perror("Binary execution failed!");
         exit(1);
@@ -186,15 +180,10 @@ int main(int argc, char** argv){
     char buffer[1024];
     while (fgets(buffer, sizeof(buffer), stream) != NULL) {
         // Process the output as needed
-        printf("%s%s%s", separator, buffer, separator);
         pid = find_max_pid(pid_counter, binary_name);
         if (pid > pid_counter){
             pid_counter = pid;
-            printf("TROVATO PID DA ATTACCARE");
             run_gdb(pid);
-        }
-        else{
-            printf("\\nCERCATO SENZA SUCCESSO!\\n");
         }
     }
     fclose(stream);
@@ -202,7 +191,7 @@ int main(int argc, char** argv){
 }
 '''
 
-# BACKUP RESTORE ROUTINE
+# Routine to restore the backup if -r (--restore-backup) argument is passed
 def restore():
     restored = False
     try:
@@ -227,8 +216,8 @@ def restore():
         print("Backup restore failed")
         exit(1)
 
-# PARSE COMMAND LINE ARGUMENTS
-def argparser():
+# Parse command line arguments
+def arg_parser():
     global DOCKER_PATH, GDBSERVER_PORT, BIN_PATH
     if len(sys.argv) < 2:
         print(HELP)
@@ -331,7 +320,7 @@ def add_compose_option(compose ,field, value):
     
 
 def main():
-    argparser()
+    arg_parser()
 
     # Check for Dockerfile
     dockerfile_path = os.path.join(DOCKER_PATH, "Dockerfile")
@@ -342,55 +331,51 @@ def main():
         print("Dockerfile not found in the specified path.")
         exit(1)
 
+    # Rename docker-compose.yaml to docker-compose.yml
     if os.path.isfile(compose_yaml_path) and not os.path.isfile(compose_yml_path):
-        # Rename docker-compose.yaml to docker-compose.yml
         os.rename(compose_yaml_path, compose_yml_path)
 
     if not os.path.isfile(compose_yml_path):
         print("docker-compose.yml not found in the specified path.")
         exit(1)
 
-    # OPEN Dockerfile
+    # Open Dockerfile
     f = open(dockerfile_path, "r")
     dockerfile = f.read()
     f.close()
 
-    # CHECK IF DOCKER IS ALREDY PATCHED
+    # Check if Dockerfile has been patched yet
     if "# DOCKER SETUP BY docker-debugger" in dockerfile:
         print("Project alredy patched, restore the backup before using docker-debugger again")
         exit(1)
 
-    # CHECK IF DOCKER USE SOCAT
+    # Check if Dockerfile use socat
     command = dockerfile[dockerfile.find("CMD "):]
     if not "socat" in command:
         print("This docker doesn't use socat...")
         exit(1)
     
-    # PARSE args_list TO USE IT IN THE C_TEMPLATE
+    # Parse the command executed by Dockerfile and add verbose option to the socat command
     args_list = docker_cmd_arg_extract(command)
     args_list = add_verbose(args_list)
-    args = str(args_list)[1:-1].split(", ")
-    for i in range(len(args)):
-        args[i] = '"' + args[i][1:-1].replace('"', '\\"') + '", '
-    args[-1] = args[-1][:-2]
-    args = "".join(args)
 
+    # Write arguments to pass them as arguments in the new Dockerfile command
     cli_args = ""
     for elem in args_list:
         cli_args = cli_args + " " + elem
 
-    # WRITING AND COMPILING debugging_bin
+    # Generating debugging_bin
     f = open("debugging_bin.c", "w")
     f.write(C_TEMPLATE)
     f.close()
     out = subprocess.run(["gcc", "debugging_bin.c", "-o", "debugging_bin"], capture_output=True, text=True)
 
-    # WRITE A BACKUP OF Dockerfile IN Dockerfile.bak
+    # Write a backup of Dockerfile in Dockerfile.bak
     f = open(dockerfile_path + ".bak", "w")
     f.write(dockerfile)
     f.close()
 
-    # PATCH Dockerfile
+    # patch Dockerfile
     patched_command = f"CMD /debugging_bin {BIN_PATH} {cli_args}"
     nuovo = dockerfile.split("CMD")
     nuovo[0] = nuovo[0] + DOCKER_SETUP + "# OLD EXECUTION COMMAND\n" + "# CMD"
@@ -400,7 +385,7 @@ def main():
     f.write(nuovo)
     f.close()
 
-    # WRITE BACKUP FOR docker-compose.yml IN docker-compose.bak
+    # Write backup for docker-compose.yml in docker-compose.bak
     f = open(compose_yml_path, "r")
     docker_compose = f.read()
     f.close()
@@ -408,7 +393,7 @@ def main():
     f.write(docker_compose)
     f.close()
 
-    # PATCH docker-compose.yml
+    # Patch docker-compose.yml
     nuovo = docker_compose.split("ports:")
     identation = nuovo[1].split("\n")[1]
     identation = identation[:identation.find("-")]

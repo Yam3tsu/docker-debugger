@@ -41,7 +41,6 @@ for dir in */ ; do
     echo -e "${CHECK} docker compose up completed"
     echo -e "${YELLOW}Testing connection to socat service on port $socat_port...${NC}"
     output=$(timeout 3 bash -c "echo 'test' | nc localhost $socat_port")
-    sleep 1
     if [ -n "$output" ]; then
         echo -e "${CHECK} Received output from socat service on port $socat_port"
     else
