@@ -311,6 +311,25 @@ def add_verbose(arguments):
     new_args = new_args + arguments[1:]
     return new_args
 
+
+def add_compose_option(compose ,field, value):
+    field_indentation = ""
+    value_identation = ""
+    is_value = False
+    for line in compose.split("\n"):
+        if is_value == True:
+            value_identation = line[:line.find("-")]
+            break
+        if "ports:" in line:
+            field_indentation = line[:line.find("ports:")]
+            is_value = True
+
+    new_compose = compose[:compose.find(f"{field_indentation}ports:")] +\
+                  f"{field_indentation}{field}:\n{value_identation}- {value}\n" +\
+                  compose[compose.find(f"{field_indentation}ports:"):]
+    return new_compose
+    
+
 def main():
     argparser()
 
@@ -396,6 +415,8 @@ def main():
     nuovo[0] = nuovo[0] + "ports:\n"
     nuovo[1] = (identation + f"- {GDBSERVER_PORT}:{GDBSERVER_PORT}") + nuovo[1]
     nuovo = "".join(nuovo)
+    nuovo = add_compose_option(nuovo, "cap_add", "SYS_PTRACE")
+    nuovo = add_compose_option(nuovo, "security_opt", "seccomp=unconfined")
     f = open(compose_yml_path, "w")
     f.write(nuovo)
     f.close()
