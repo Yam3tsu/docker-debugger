@@ -32,9 +32,8 @@ updated_docker_debugger = re.sub(
     docker_debugger,
     flags=re.MULTILINE)
 
-print(updated_docker_debugger)
 
-# f = open("docker-debugger.py", "w")
-# f.write(updated_docker_debugger)
-# f.close()
-# print(f"{CHECK} docker-debugger.py updated successfully")
+f = open("docker-debugger.py", "w")
+f.write(updated_docker_debugger)
+f.close()
+print(f"{CHECK} docker-debugger.py updated successfully")
