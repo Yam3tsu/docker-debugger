@@ -8,7 +8,7 @@ POSITIONAL_ARGUMENTS = 1
 GDBSERVER_PORT = 1234
 DOCKER_PATH = "./"
 HELP = '''
-Usage: docker-debugger /path/fo/binary/in/docker
+Usage: docker-debugger /path/to/challenge/binary/in/docker
 
 
 OPTIONS:
