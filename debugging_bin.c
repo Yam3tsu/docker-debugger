@@ -49,7 +49,7 @@ int find_max_pid(int start_pid, char* bin_name) {
 }
 
 // Run gdbserver attached to pid
-void run_gdb(int pid){
+void run_gdb(int pid, int port){
     pid_t debugger;
     int dev_null;
     char* debugger_args[5];
@@ -64,10 +64,12 @@ void run_gdb(int pid){
     debugger = fork();
     if (debugger == 0){
         debugger_args[0] = "gdbserver";
-        debugger_args[1] = ":1234";
+        // debugger_args[1] = ":1234";
+        debugger_args[1] = malloc(0x10);
         debugger_args[2] = "--attach";
         debugger_args[3] = malloc(0x10);
         sprintf(debugger_args[3], "%d", pid);
+        sprintf(debugger_args[1], ":%d", port);
         debugger_args[4] = NULL;
         execvp("gdbserver", debugger_args);
     }
@@ -84,6 +86,7 @@ int main(int argc, char** argv){
     int pid;
     char** binary_arguments;
     char* binary_name;
+    int gdbserver_port = 0;
     int pipefd[2];
 
     if (argc < 2){
@@ -93,11 +96,16 @@ int main(int argc, char** argv){
 
     // Parsing command line arguments
     binary_name = argv[1];
-    binary_arguments = malloc( sizeof(char*) * (argc - 1) );
-    for (int i = 2;i < argc; i++){
-        binary_arguments[i - 2] = argv[i];
+    gdbserver_port = atoi(argv[2]);
+    if (gdbserver_port <= 0 || gdbserver_port > 65535){
+        perror("Insert a valid port!");
+        exit(1);
     }
-    binary_arguments[argc - 2] = NULL;
+    binary_arguments = malloc( sizeof(char*) * (argc - 2) );
+    for (int i = 3;i < argc; i++){
+        binary_arguments[i - 3] = argv[i];
+    }
+    binary_arguments[argc - 3] = NULL;
 
     // Use a pipe to capture the output of socat
     pipe(pipefd);
@@ -128,7 +136,7 @@ int main(int argc, char** argv){
         pid = find_max_pid(pid_counter, binary_name);
         if (pid > pid_counter){
             pid_counter = pid;
-            run_gdb(pid);
+            run_gdb(pid, gdbserver_port);
         }
     }
     fclose(stream);
