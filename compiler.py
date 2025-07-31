@@ -1,3 +1,5 @@
+# This script compile debugging_bin.c and update it in docker-debugger.py
+
 import subprocess
 import base64
 import re
@@ -10,6 +12,7 @@ CHECK=f"{GREEN}✔{NC}"
 CROSS=f"{RED}✖{NC}"
 BINARY_NAME = "debugging_bin"
 
+# Compile debugging_bin.c
 print(f"{CYAN}Compiling {BINARY_NAME}...{NC}")
 try:
     result = subprocess.run(["gcc", f"{BINARY_NAME}.c", "-o", f"{BINARY_NAME}"], check=True)
@@ -18,6 +21,7 @@ except:
     print(f"{CROSS}Compilation failed!")
     exit(1)
 
+# Read compiled debugging_bin and docker-debugger.py
 print(f"{CYAN}Updating docker-debugger.py...{NC}")
 f = open(BINARY_NAME, "rb")
 binary = f.read()
@@ -26,6 +30,7 @@ f = open("docker-debugger.py", "r")
 docker_debugger = f.read()
 f.close()
 
+# Update docker-debugger.py
 updated_docker_debugger = re.sub(
     r'^(BINARY = )b".*"$',
     fr'\1b"{base64.b64encode(binary).decode()}"',
